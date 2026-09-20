@@ -1,7 +1,7 @@
 ---
 name: sql-reviewer
 description: Review the SQL in the current git diff before committing. Finds Oracle correctness bugs, silent data-loss traps, index-killing predicates and ETL grain breaks in SQL embedded in Python, DSL specs and .sql files, then writes a dated markdown report. Use when asked to review SQL or queries, check a diff before committing, or when the user runs /sql-reviewer.
-argument-hint: "[--staged | --branch | <git-range> | <paths...>]"
+argument-hint: "[--staged] [--branch] [<git-range>] [<paths...>] [--help]"
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent
 license: MIT
 ---
@@ -36,6 +36,24 @@ they learn to ignore.
    suspicion goes in *"Needs a number"* or is dropped. Do not pad.
 5. **Every finding needs a fix.** Not "consider reviewing this" — the corrected expression.
 
+## Step 0 — `--help`
+
+If the argument is `--help`, `-h` or `help`, print exactly this table and **stop**. Run no
+collection, write no report.
+
+```
+/sql-reviewer                    review what you are about to commit
+                                 (staged changes, else unstaged, else whole branch)
+
+/sql-reviewer --staged           only what `git commit` would capture
+/sql-reviewer --branch           the whole branch vs the integration branch
+/sql-reviewer main..HEAD         any git diff range
+/sql-reviewer src/db.py          restrict to specific files or directories
+/sql-reviewer --branch src/      a range and a path restriction together
+
+Report:  <your-git-name>.sql-review.<today>.md  in the repository root
+```
+
 ## Step 1 — collect the SQL
 
 Locate the collector. Try these in order and use the first that exists:
@@ -56,6 +74,17 @@ python3 <collect.py> --repo . --out <tmp>/sql-review-collect.json
 ```
 
 With no arguments it cascades: staged → unstaged → whole branch. Read the JSON.
+
+**Announce the scope before reviewing.** The user cannot see which scope the cascade picked,
+and a review of the wrong scope wastes their time silently. Print two lines and continue —
+do not wait for a reply:
+
+```
+Scope: staged changes (4 files).
+Other scopes: --branch | <git-range> | <paths...> | --help
+```
+
+Take the scope wording from `meta.scope` and the file count from `meta.changed_files`.
 
 It returns `meta` (scope, counts, per-surface tallies, truncation), `units` (each a
 reviewable chunk with its `surface`, `file`, line range, changed lines, resolved `sql`
@@ -165,7 +194,13 @@ not a failed run.
 | `--staged` | Only what `git commit` would capture |
 | `--branch` | The whole branch vs the integration branch |
 | `<git-range>` | Any explicit range, e.g. `main..HEAD` |
-| `<paths...>` | Restrict to those files |
+| `<paths...>` | Restrict to those files or directories |
+| `--help` | Print the option table and stop |
+
+Ranges and paths combine: `--branch src/db/` reviews the whole branch, restricted to that
+directory. The collector decides which positional argument is which — anything that exists
+on disk is a path, anything git resolves as a revision is a range — so order does not
+matter.
 
 ## What not to do
 

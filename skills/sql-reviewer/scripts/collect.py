@@ -106,9 +106,29 @@ def resolve_scope(cwd, explicit=None, mode=None):
     return (["%s...HEAD" % mb], "branch vs %s (working tree was clean)" % mb)
 
 
-def changed_files_and_lines(cwd, diff_args):
+def split_targets(cwd, targets):
+    """Separate positional arguments into (git_range, pathspec).
+
+    A user may type either form, or both:  `main..HEAD`,  `src/db.py`,
+    `main..HEAD src/db.py`. Anything that exists on disk is a path;
+    anything git resolves as a revision is a range.
+    """
+    rng, paths = None, []
+    for t in targets or []:
+        if os.path.exists(os.path.join(cwd, t)) or os.path.exists(t):
+            paths.append(t)
+        elif ".." in t or git("rev-parse", "--verify", "--quiet", t,
+                              cwd=cwd, check=False).strip():
+            rng = t
+        else:
+            paths.append(t)  # let git pathspec decide; it may be a glob
+    return rng, paths
+
+
+def changed_files_and_lines(cwd, diff_args, paths=None):
     """Map path -> set of changed line numbers, from a -U0 diff."""
-    out = git("diff", "-U0", *(list(diff_args) + ["--"]), cwd=cwd, check=False)
+    argv = list(diff_args) + ["--"] + list(paths or [])
+    out = git("diff", "-U0", *argv, cwd=cwd, check=False)
     files = defaultdict(set)
     cur = None
     hunk_re = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@")
@@ -500,7 +520,8 @@ def main():
     ap = argparse.ArgumentParser(
         description="Collect reviewable SQL out of a git diff.",
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("range", nargs="?", help="explicit git diff range, e.g. main..HEAD")
+    ap.add_argument("targets", nargs="*",
+                    help="a git range (main..HEAD) and/or paths to restrict to")
     ap.add_argument("--staged", action="store_true", help="review only staged changes")
     ap.add_argument("--branch", action="store_true", help="review the whole branch")
     ap.add_argument("--repo", default=".", help="path inside the repository")
@@ -524,8 +545,11 @@ def main():
 
     root = repo_root(args.repo)
     mode = "staged" if args.staged else "branch" if args.branch else None
-    diff_args, scope_desc = resolve_scope(root, args.range, mode)
-    changed = changed_files_and_lines(root, diff_args)
+    explicit_range, paths = split_targets(root, args.targets)
+    diff_args, scope_desc = resolve_scope(root, explicit_range, mode)
+    if paths:
+        scope_desc += ", restricted to %s" % ", ".join(paths)
+    changed = changed_files_and_lines(root, diff_args, paths)
 
     units, skipped, surfaces = [], [], defaultdict(int)
     for path, lines in sorted(changed.items()):
@@ -591,6 +615,7 @@ def main():
             "main_branch": main_branch(root),
             "scope": scope_desc,
             "diff_args": diff_args,
+            "pathspec": paths,
             "author_slug": author_slug(root),
             "changed_files": len(changed),
             "surfaces": dict(surfaces),

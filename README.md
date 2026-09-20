@@ -75,14 +75,22 @@ With no arguments it works out what you are about to commit, in this order:
 2. **Unstaged working-tree changes**, if nothing is staged.
 3. **The whole branch** against the repository's main branch, if the working tree is clean.
 
+It announces which scope it picked before reviewing, so a run against the wrong scope is
+visible rather than silent.
+
 You can also aim it explicitly:
 
 ```
 /sql-reviewer --staged           review only what git commit would capture
-/sql-reviewer --branch           review the whole branch vs the main branch
+/sql-reviewer --branch           review the whole branch vs the integration branch
 /sql-reviewer main..HEAD         review any git diff range
-/sql-reviewer path/to/file.py    review specific files
+/sql-reviewer path/to/file.py    restrict to specific files or directories
+/sql-reviewer --branch src/      a range and a path restriction together
+/sql-reviewer --help             print the option table and stop
 ```
+
+Ranges and paths combine, and order does not matter: anything that exists on disk is treated
+as a path, anything git resolves as a revision is treated as a range.
 
 ---
 
