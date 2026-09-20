@@ -2,7 +2,7 @@
   "name": "sql-reviewer",
   "displayName": "SQL Reviewer",
   "description": "Pre-commit SQL review for Oracle-heavy ETL and data-migration codebases. Finds correctness bugs, silent-data-loss traps and index-killing predicates in the SQL inside your git diff, and writes a dated markdown report.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": {
     "name": "Abdelfattah Tamer"
   },

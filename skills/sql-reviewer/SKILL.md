@@ -1,7 +1,7 @@
 ---
 name: sql-reviewer
 description: Review the SQL in the current git diff before committing. Finds Oracle correctness bugs, silent data-loss traps, index-killing predicates and ETL grain breaks in SQL embedded in Python, DSL specs and .sql files, then writes a dated markdown report. Use when asked to review SQL or queries, check a diff before committing, or when the user runs /sql-reviewer.
-argument-hint: "[--staged] [--branch] [<git-range>] [<paths...>] [--help]"
+argument-hint: "[--staged] [--branch] [<range>] [<paths...>] | update | version | --help"
 allowed-tools: Bash, Read, Write, Glob, Grep, Agent
 license: MIT
 ---
@@ -36,10 +36,14 @@ they learn to ignore.
    suspicion goes in *"Needs a number"* or is dropped. Do not pad.
 5. **Every finding needs a fix.** Not "consider reviewing this" — the corrected expression.
 
-## Step 0 — `--help`
+## Step 0 — subcommands
 
-If the argument is `--help`, `-h` or `help`, print exactly this table and **stop**. Run no
-collection, write no report.
+Handle these **before** anything else. Each one runs and stops; none of them collects SQL or
+writes a report.
+
+### `--help`, `-h`, `help`
+
+Print exactly this and stop:
 
 ```
 /sql-reviewer                    review what you are about to commit
@@ -51,8 +55,37 @@ collection, write no report.
 /sql-reviewer src/db.py          restrict to specific files or directories
 /sql-reviewer --branch src/      a range and a path restriction together
 
+/sql-reviewer update             update this skill to the latest published version
+/sql-reviewer update --check     show what an update would change, change nothing
+/sql-reviewer version            print the installed version
+/sql-reviewer --help             this table
+
 Report:  <your-git-name>.sql-review.<today>.md  in the repository root
 ```
+
+### `update`
+
+Run the bundled updater, from the same directory as `collect.py`:
+
+```bash
+<python> <skill-dir>/scripts/update.py          # update in place
+<python> <skill-dir>/scripts/update.py --check  # report only
+```
+
+It fetches the published skill, compares file by file, and copies over only what differs,
+naming each changed file. Relay its output as-is — it already reports the version
+transition and which files moved.
+
+It deliberately **refuses to modify a plugin-managed install**, because those files belong
+to Claude Code's plugin cache and a hand-edit there is undone by the next plugin refresh.
+If it refuses, tell the user to update through `/plugin` instead. Do not work around it by
+copying files into the plugin cache yourself.
+
+Tell the user the change takes effect in their **next** session.
+
+### `version`
+
+Read and print `<skill-dir>/VERSION`, with the install location. One line, nothing else.
 
 ## Step 1 — collect the SQL
 
@@ -64,10 +97,23 @@ ${CLAUDE_PLUGIN_ROOT}/skills/sql-reviewer/scripts/collect.py
 <repo>/.claude/skills/sql-reviewer/scripts/collect.py
 ```
 
-Run it, passing through whatever the user gave you:
+**Resolve the Python interpreter by running it, not by checking the name exists.** On
+Windows, `python3` is usually on PATH as a Microsoft Store stub that prints "Python was not
+found" and exits non-zero, while the working interpreter is `python` or `py -3`. A `which`
+or `command -v` test passes on that stub and the command then fails with a confusing error.
+
+Try each of these and take the first whose `--version` actually succeeds:
 
 ```bash
-python3 <collect.py> --repo . --out <tmp>/sql-review-collect.json
+python3 --version   #  POSIX, and Windows only when a real python3 is installed
+python  --version   #  usual Windows name, and many virtualenvs
+py -3   --version   #  the Windows launcher, most reliable there
+```
+
+Run the collector with that interpreter, passing through whatever the user gave you:
+
+```bash
+<python> <collect.py> --repo . --out <tmp>/sql-review-collect.json
 # --staged      only what `git commit` would capture
 # --branch      the whole branch vs the integration branch
 # <git-range>   any explicit range, e.g. main..HEAD
@@ -195,6 +241,9 @@ not a failed run.
 | `--branch` | The whole branch vs the integration branch |
 | `<git-range>` | Any explicit range, e.g. `main..HEAD` |
 | `<paths...>` | Restrict to those files or directories |
+| `update` | Update the skill to the latest published version |
+| `update --check` | Report what an update would change, change nothing |
+| `version` | Print the installed version and location |
 | `--help` | Print the option table and stop |
 
 Ranges and paths combine: `--branch src/db/` reviews the whole branch, restricted to that

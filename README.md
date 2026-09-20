@@ -89,6 +89,36 @@ You can also aim it explicitly:
 /sql-reviewer --help             print the option table and stop
 ```
 
+---
+
+## Update
+
+```
+/sql-reviewer update
+```
+
+That is the whole thing. It fetches the published skill, compares it against what you have
+installed, copies over only what differs, and tells you which files changed:
+
+```
+Installed: 0.2.0  (user-level (all projects))
+0.2.0 -> 0.3.0
+  changed  rules/oracle-correctness.md
+  changed  scripts/collect.py
+  added    rules/postgres.md
+Updated 3 file(s) to 0.3.0.
+```
+
+Use `/sql-reviewer update --check` to see what would change without writing anything, and
+`/sql-reviewer version` to see what you have.
+
+Updates take effect in your **next** session.
+
+If you installed via the plugin marketplace, update it through the plugin system instead:
+run `/plugin` and use its update option for `sql-reviewer`. `/sql-reviewer update` detects a
+plugin-managed install and stops rather than editing files the plugin system owns — a
+hand-edit there is silently reverted by the next plugin refresh.
+
 Ranges and paths combine, and order does not matter: anything that exists on disk is treated
 as a path, anything git resolves as a revision is treated as a range.
 
