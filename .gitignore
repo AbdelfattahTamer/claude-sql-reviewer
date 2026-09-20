@@ -1,0 +1,29 @@
+# ---------------------------------------------------------------------------
+# Safety first: this is a PUBLIC repo. Nothing project-specific may land here.
+#
+# The skill generates two kinds of file that describe a *user's own* codebase —
+# schema names, table names, row counts. Those are the user's (or their
+# client's) confidential data and must never be committed to this repo, even
+# by accident while developing the skill itself.
+# ---------------------------------------------------------------------------
+
+# Generated review reports (named <author>.sql-review.<date>.md)
+*.sql-review.*.md
+
+# Generated per-project rule layers
+.sql-review/
+*.local.md
+project-rules.local.*
+
+# Scratch
+*.tmp
+*.bak
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/

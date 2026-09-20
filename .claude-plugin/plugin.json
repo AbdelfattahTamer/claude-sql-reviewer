@@ -1,0 +1,20 @@
+{
+  "name": "sql-reviewer",
+  "displayName": "SQL Reviewer",
+  "description": "Pre-commit SQL review for Oracle-heavy ETL and data-migration codebases. Finds correctness bugs, silent-data-loss traps and index-killing predicates in the SQL inside your git diff, and writes a dated markdown report.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Abdelfattah Tamer"
+  },
+  "homepage": "https://github.com/AbdelfattahTamer/claude-sql-reviewer",
+  "repository": "https://github.com/AbdelfattahTamer/claude-sql-reviewer",
+  "license": "MIT",
+  "keywords": [
+    "sql",
+    "oracle",
+    "code-review",
+    "etl",
+    "data-migration",
+    "pre-commit"
+  ]
+}

@@ -1,0 +1,14 @@
+# Line endings are pinned per file type, not left to each clone's platform.
+#
+# Without this, a Windows clone checks install.sh out with CRLF and bash on
+# macOS/Linux fails with "bad interpreter: /usr/bin/env bash^M" -- on the very
+# first command a new user runs.
+
+* text=auto
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.json text eol=lf
+
+*.ps1  text eol=crlf
