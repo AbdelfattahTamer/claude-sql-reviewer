@@ -129,8 +129,21 @@ def main():
         print("and use its update option for sql-reviewer.")
         return 3
 
+    scope = install_scope(target)
+    if scope == "unrecognised location" and not args.target:
+        # The likely cause is a user who read "update" as "pull the latest",
+        # re-cloned the repo, and ran this from the clone. Updating the clone
+        # and printing "Updated N files" would leave their real installation
+        # untouched behind a success message.
+        print("This looks like a source clone, not an installed skill:")
+        print("  %s" % target)
+        print()
+        print("Install from here with:   bash install.sh --force")
+        print("Or name the installation: --target <installed skill directory>")
+        return 5
+
     installed_version = read_version(target)
-    print("Installed: %s  (%s)" % (installed_version, install_scope(target)))
+    print("Installed: %s  (%s)" % (installed_version, scope))
     print("Location:  %s" % target)
     print("Source:    %s" % args.url)
     print()

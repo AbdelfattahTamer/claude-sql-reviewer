@@ -44,10 +44,18 @@ $dest = Join-Path $destRoot 'sql-reviewer'
 if ((Test-Path $dest) -and (-not $Force)) {
     Write-Host "A skill is already installed at:"
     Write-Host "  $dest"
-    $reply = Read-Host 'Overwrite it? [y/N]'
+    # Exit non-zero on abort. Exiting 0 having changed nothing made an
+    # agent-driven update report success, leaving the user believing they run
+    # a version they do not.
+    try {
+        $reply = Read-Host 'Overwrite it? [y/N]'
+    } catch {
+        Write-Error 'No console to prompt on, so nothing was changed. Re-run with -Force.'
+        exit 3
+    }
     if ($reply -notmatch '^(y|yes)$') {
-        Write-Host 'Aborted. Nothing was changed.'
-        exit 0
+        Write-Error 'Aborted. Nothing was changed.'
+        exit 3
     }
 }
 
@@ -63,4 +71,6 @@ Copy-Item -Recurse -Path $srcDir -Destination $dest
 
 Write-Host "Installed to: $dest"
 Write-Host ''
-Write-Host 'Start a new Claude Code session and run:  /sql-reviewer'
+Write-Host 'Run /sql-reviewer. Claude Code watches the skills directory, so a running'
+Write-Host 'session picks this up without a restart -- unless the skills directory did'
+Write-Host 'not exist when that session started, in which case restart it once.'

@@ -1,19 +1,16 @@
 # ---------------------------------------------------------------------------
 # Safety first: this is a PUBLIC repo. Nothing project-specific may land here.
 #
-# The skill generates two kinds of file that describe a *user's own* codebase —
-# schema names, table names, row counts. Those are the user's (or their
-# client's) confidential data and must never be committed to this repo, even
-# by accident while developing the skill itself.
+# A review report describes a *user's own* codebase — table names, column
+# names, schema. That is their (or their client's) confidential data and must
+# never be committed here, even by accident while developing the skill itself.
 # ---------------------------------------------------------------------------
 
 # Generated review reports (named <author>.sql-review.<date>.md)
 *.sql-review.*.md
 
-# Generated per-project rule layers
-.sql-review/
-*.local.md
-project-rules.local.*
+# A project-local rule layer, if one gets written while testing here
+.claude/sql-review-rules.md
 
 # Scratch
 *.tmp

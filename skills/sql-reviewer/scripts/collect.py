@@ -34,6 +34,7 @@ import argparse
 import ast
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -67,15 +68,25 @@ def current_branch(cwd=None):
     return git("rev-parse", "--abbrev-ref", "HEAD", cwd=cwd).strip()
 
 
+INTEGRATION_CANDIDATES = ("dev", "develop", "main", "master", "trunk")
+
+
 def main_branch(cwd=None):
-    """Best guess at the integration branch, without assuming it is 'main'."""
+    """The integration branch, or None when it cannot be determined.
+
+    Returning a placeholder here would be worse than returning nothing. An
+    earlier version returned the literal "HEAD" on failure, which made the
+    branch comparison `HEAD...HEAD` -- an empty diff. The collector then found
+    no SQL and the review reported "nothing to review", when in truth nothing
+    had been reviewed. A tool that cannot find its baseline must say so.
+    """
     ref = git("symbolic-ref", "refs/remotes/origin/HEAD", cwd=cwd, check=False).strip()
     if ref:
         return ref.rsplit("/", 1)[-1]
-    for cand in ("dev", "develop", "main", "master"):
+    for cand in INTEGRATION_CANDIDATES:
         if git("rev-parse", "--verify", "--quiet", cand, cwd=cwd, check=False).strip():
             return cand
-    return "HEAD"
+    return None
 
 
 def author_slug(cwd=None):
@@ -86,24 +97,33 @@ def author_slug(cwd=None):
     return slug or "unknown"
 
 
+NO_BASELINE = ("no integration branch found (tried origin/HEAD, %s) -- "
+               "pass an explicit range, e.g. <base>..HEAD"
+               % ", ".join(INTEGRATION_CANDIDATES))
+
+
 def resolve_scope(cwd, explicit=None, mode=None):
     """Smart cascade: staged -> unstaged -> whole branch.
 
-    Returns (diff_args, human_readable_description).
+    Returns (diff_args, description, error_or_None).
     """
     if explicit:
-        return ([explicit], "explicit range %s" % explicit)
+        return ([explicit], "explicit range %s" % explicit, None)
     if mode == "staged":
-        return (["--cached"], "staged changes")
+        return (["--cached"], "staged changes", None)
     if mode == "branch":
         mb = main_branch(cwd)
-        return (["%s...HEAD" % mb], "branch vs %s" % mb)
+        if not mb:
+            return ([], "branch (no baseline)", NO_BASELINE)
+        return (["%s...HEAD" % mb], "branch vs %s" % mb, None)
     if git("diff", "--cached", "--name-only", cwd=cwd, check=False).strip():
-        return (["--cached"], "staged changes")
+        return (["--cached"], "staged changes", None)
     if git("diff", "--name-only", cwd=cwd, check=False).strip():
-        return ([], "unstaged working-tree changes")
+        return ([], "unstaged working-tree changes", None)
     mb = main_branch(cwd)
-    return (["%s...HEAD" % mb], "branch vs %s (working tree was clean)" % mb)
+    if not mb:
+        return ([], "branch (no baseline)", NO_BASELINE)
+    return (["%s...HEAD" % mb], "branch vs %s (working tree was clean)" % mb, None)
 
 
 def split_targets(cwd, targets):
@@ -422,7 +442,14 @@ def collect_python(path, abspath, changed, max_unit_lines):
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
-        return [], {"file": path, "reason": "python syntax error at line %s" % exc.lineno}
+        # Blame the interpreter, not the user. This runs under whichever Python
+        # launched the collector, which may be older than the syntax in the
+        # repository being reviewed (match statements, `X | None` annotations).
+        # Reported as "syntax error", a perfectly valid file reads as a genuine
+        # finding against the author's code.
+        return [], {"file": path,
+                    "reason": "could not parse under Python %s (the file may use newer "
+                              "syntax): line %s" % (platform.python_version(), exc.lineno)}
 
     resolver = SqlResolver(tree)
     hits = [h for h in resolver.find()
@@ -543,13 +570,20 @@ def main():
         except (AttributeError, ValueError):
             ascii_only = True
 
-    root = repo_root(args.repo)
+    try:
+        root = repo_root(args.repo)
+    except RuntimeError:
+        sys.stderr.write(
+            "sql-reviewer reviews a git diff, and %s is not inside a git repository.\n"
+            % os.path.abspath(args.repo))
+        return 2
+
     mode = "staged" if args.staged else "branch" if args.branch else None
     explicit_range, paths = split_targets(root, args.targets)
-    diff_args, scope_desc = resolve_scope(root, explicit_range, mode)
+    diff_args, scope_desc, scope_error = resolve_scope(root, explicit_range, mode)
     if paths:
         scope_desc += ", restricted to %s" % ", ".join(paths)
-    changed = changed_files_and_lines(root, diff_args, paths)
+    changed = {} if scope_error else changed_files_and_lines(root, diff_args, paths)
 
     units, skipped, surfaces = [], [], defaultdict(int)
     for path, lines in sorted(changed.items()):
@@ -614,6 +648,7 @@ def main():
             "branch": current_branch(root),
             "main_branch": main_branch(root),
             "scope": scope_desc,
+            "scope_error": scope_error,
             "diff_args": diff_args,
             "pathspec": paths,
             "author_slug": author_slug(root),
@@ -639,4 +674,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main() or 0)

@@ -2,7 +2,7 @@
 name: sql-reviewer
 description: Review the SQL in the current git diff before committing. Finds Oracle correctness bugs, silent data-loss traps, index-killing predicates and ETL grain breaks in SQL embedded in Python, DSL specs and .sql files, then writes a dated markdown report. Use when asked to review SQL or queries, check a diff before committing, or when the user runs /sql-reviewer.
 argument-hint: "[--staged] [--branch] [<range>] [<paths...>] | update | version | --help"
-allowed-tools: Bash, Read, Write, Glob, Grep, Agent
+allowed-tools: Bash, Read, Write, Glob, Grep, Task
 license: MIT
 ---
 
@@ -81,7 +81,13 @@ to Claude Code's plugin cache and a hand-edit there is undone by the next plugin
 If it refuses, tell the user to update through `/plugin` instead. Do not work around it by
 copying files into the plugin cache yourself.
 
-Tell the user the change takes effect in their **next** session.
+**If `scripts/update.py` does not exist** in the installed skill directory, it predates
+0.2.0. Tell the user to re-clone and run `bash install.sh --force` once; `/sql-reviewer
+update` works from then on.
+
+Claude Code watches skill directories, so an updated `SKILL.md` takes effect in the running
+session without a restart. Say that — but add the one exception: if the skills directory did
+not exist when the session started, it is not being watched and a restart is needed.
 
 ### `version`
 
@@ -112,8 +118,15 @@ py -3   --version   #  the Windows launcher, most reliable there
 
 Run the collector with that interpreter, passing through whatever the user gave you:
 
+Write the JSON to the OS temp directory. Do not assume `/tmp` — it does not exist on
+Windows. Get it from `$TMPDIR`, `$TEMP`, or portably:
+
 ```bash
-<python> <collect.py> --repo . --out <tmp>/sql-review-collect.json
+<python> -c "import tempfile;print(tempfile.gettempdir())"
+```
+
+```bash
+<python> <collect.py> --repo . --out <tempdir>/sql-review-collect.json
 # --staged      only what `git commit` would capture
 # --branch      the whole branch vs the integration branch
 # <git-range>   any explicit range, e.g. main..HEAD
@@ -141,8 +154,14 @@ reason).
 keyword grep over this kind of code is roughly 4:1 prose-to-SQL — source files discuss SQL
 in comments constantly. If you grep, you will report comments as findings.
 
-If `units` is empty, say so plainly, show what was skipped and why, and stop. A diff with no
-SQL is a valid outcome.
+**Check `meta.scope_error` before believing an empty result.** If it is set, the collector
+could not work out what to compare against — it found no integration branch — and reviewed
+nothing. Report that and stop. Do **not** report "no SQL found": nothing was examined, which
+is a different statement, and confusing the two is the exact failure Ground Rule 3 forbids.
+Ask for an explicit range instead.
+
+If `scope_error` is null and `units` is empty, say so plainly, show what was skipped and
+why, and stop. A diff with no SQL is a valid outcome.
 
 ## Step 2 — load the rules
 
@@ -193,6 +212,10 @@ If you find nothing, review generically and say so in Coverage. Do not invent sc
 plus the rule categories that apply to it. Do not review everything in one pass — a large
 diff will not fit, and a single agent holding 40 units reviews the last ones badly.
 
+If no subagent tool is available in this session, review the surfaces sequentially instead,
+and record in Coverage that the review ran sequentially — quality degrades on long diffs and
+the user should know which kind of review they got.
+
 Give each agent: its units verbatim from the JSON, the relevant rule category files, the
 project schema evidence you found, and the ground rules above.
 
@@ -222,8 +245,8 @@ Fill `templates/report.md` and write it to the **repository root** as:
 <author-slug>.sql-review.<YYYY-MM-DD>.md
 ```
 
-`author_slug` comes from the collector's `meta`. Get the date from `date +%F` — do not
-assume it.
+`author_slug` comes from the collector's `meta`. Get today's date from the shell rather than
+assuming it — `date +%F` on POSIX, `Get-Date -Format yyyy-MM-dd` in PowerShell.
 
 Order findings by severity, then by file. Fill Coverage honestly from the collector's
 `meta.skipped` and `meta.truncated_by_surface`.

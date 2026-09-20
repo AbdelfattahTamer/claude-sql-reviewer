@@ -34,11 +34,22 @@ fi
 if [ -e "$DEST" ] && [ "$FORCE" -ne 1 ]; then
   echo "A skill is already installed at:"
   echo "  $DEST"
+  # Exit non-zero when there is nobody to ask. Falling through to "Aborted"
+  # with exit 0 made an agent-driven update report success having changed
+  # nothing -- the worst possible outcome, because the user then believes
+  # they are running a version they are not.
+  if [ ! -r /dev/tty ]; then
+    echo "Not a terminal, so nothing was changed. Re-run with --force." >&2
+    exit 3
+  fi
   printf 'Overwrite it? [y/N] '
-  read -r reply </dev/tty || reply=""
+  if ! read -r reply </dev/tty; then
+    echo "Could not read a reply, so nothing was changed. Re-run with --force." >&2
+    exit 3
+  fi
   case "$reply" in
     [yY]|[yY][eE][sS]) ;;
-    *) echo "Aborted. Nothing was changed."; exit 0 ;;
+    *) echo "Aborted. Nothing was changed." >&2; exit 3 ;;
   esac
 fi
 
@@ -48,4 +59,6 @@ cp -R "$SRC_DIR" "$DEST"
 
 echo "Installed to: $DEST"
 echo
-echo "Start a new Claude Code session and run:  /sql-reviewer"
+echo "Run /sql-reviewer. Claude Code watches the skills directory, so a running"
+echo "session picks this up without a restart -- unless ~/.claude/skills did not"
+echo "exist when that session started, in which case restart it once."
